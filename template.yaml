@@ -9,7 +9,7 @@ Metadata:
     SpdxLicenseId: MIT-0
     LicenseUrl: LICENSE
     ReadmeUrl: README.md
-    Labels: ['connect','chat','redaction','comprehend','step functions','lambda']
+    Labels: ['connect','chat','redaction','comprehend','step-functions','lambda']
     HomePageUrl: https://github.com/aws-samples/amazon-connect-chat-redaction
     SemanticVersion: 0.0.1
     SourceCodeUrl: https://github.com/aws-samples/amazon-connect-chat-redaction
