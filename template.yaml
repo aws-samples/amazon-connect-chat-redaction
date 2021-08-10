@@ -1,0 +1,232 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Template for deploying the Amazon Connect chat redaction demo application
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: amazon-connect-chat-redaction
+    Description:  Amazon Connect chat redaction demo application
+    Author: Amazon Connect CX Innovations
+    SpdxLicenseId: MIT-0
+    LicenseUrl: LICENSE
+    ReadmeUrl: README.md
+    Labels: ['connect','chat','redaction','comprehend','step functions','lambda']
+    HomePageUrl: https://github.com/aws-samples/amazon-connect-chat-redaction
+    SemanticVersion: 0.0.1
+    SourceCodeUrl: https://github.com/aws-samples/amazon-connect-chat-redaction
+Parameters:
+  ConnectChatBucketName:
+    Type: String
+    Description: The existing Amazon Connect S3 bucket where transcripts are stored eg. connect-270e274d111a
+  ConnectChatBucketName:
+    Type: String
+    Description: The existing Amazon Connect S3 bucket where transcripts are stored eg. connect-270e274d111a
+Resources:
+  RedactionStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: statemachine/connect-transcript-redaction-workflow.asl.json
+      DefinitionSubstitutions:
+        LoadTranscriptFunctionArn: !GetAtt LoadTranscriptFunction.Arn
+        SubmitComprehendJobFunctionArn: !GetAtt SubmitComprehendJobFunction.Arn
+        CheckComprehendStatusFunctionArn: !GetAtt CheckComprehendStatusFunction.Arn
+        StoreRedactedTranscriptFunctionArn: !GetAtt StoreRedactedTranscriptFunction.Arn
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref LoadTranscriptFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SubmitComprehendJobFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CheckComprehendStatusFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref StoreRedactedTranscriptFunction
+
+  InvokeRedactionStateMachineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: invoke-redaction-state-machine
+      CodeUri: functions/invokeRedactionStateMachine/
+      Handler: invokeRedactionStateMachine.lambda_handler
+      Runtime: python3.8
+      Environment:
+        Variables:
+          WAIT_TIME: 240
+          LOGGING_LEVEL: 'INFO'
+          REDACTION_STATE_MACHINE_ARN: !GetAtt RedactionStateMachine.Arn
+      Role: !GetAtt  StateMachineInvokeRole.Arn
+  
+  ChatRedactionLambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: put-transcript-in-s3
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+              - Effect: "Allow"
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:DeleteObject'
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${ConnectChatBucketName}"
+                  - !Sub "arn:${AWS::Partition}:s3:::${ConnectChatBucketName}/*"
+              - Effect: "Allow"
+                Action:
+                  - 'comprehend:DescribePiiEntitiesDetectionJob'
+                  - 'comprehend:StartPiiEntitiesDetectionJob'
+                Resource:
+                  - "*"
+              - Effect: "Allow"
+                Action:
+                  - 'iam:PassRole'
+                Resource:
+                  - !GetAtt ComprehendDataAccessRole.Arn
+  StateMachineInvokeRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: put-transcript-in-s3
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+              - Effect: "Allow"
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${ConnectChatBucketName}"
+                  - !Sub "arn:${AWS::Partition}:s3:::${ConnectChatBucketName}/*"
+              - Effect: "Allow"
+                Action:
+                  - 'comprehend:DescribePiiEntitiesDetectionJob'
+                  - 'comprehend:StartPiiEntitiesDetectionJob'
+                Resource:
+                  - "*"
+              - Effect: "Allow"
+                Action:
+                  - 'states:StartExecution'
+                Resource:
+                  - !GetAtt RedactionStateMachine.Arn
+  ComprehendDataAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - comprehend.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/ComprehendDataAccessRolePolicy 
+      Policies:
+        - PolicyName: access-to-s3
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${ConnectChatBucketName}"
+                  - !Sub "arn:${AWS::Partition}:s3:::${ConnectChatBucketName}/*"
+  LoadTranscriptFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: load-connect-transcript
+      CodeUri: functions/loadTranscript/
+      Handler: loadTranscript.lambda_handler
+      Runtime: python3.8
+      Environment:
+        Variables:
+          LOGGING_LEVEL: 'INFO'
+      Role: !GetAtt  ChatRedactionLambdaExecutionRole.Arn
+  SubmitComprehendJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: submit-comprehend-job
+      CodeUri: functions/submitComprehendJob/
+      Handler: submitComprehendJob.lambda_handler
+      Runtime: python3.8
+      Environment:
+        Variables:
+          LOGGING_LEVEL: INFO
+          COMPREHEND_DATA_ACCESS_ROLE_ARN: !GetAtt ComprehendDataAccessRole.Arn
+          PII_ENTITY_TYPES: BANK_ACCOUNT_NUMBER,BANK_ROUTING,CREDIT_DEBIT_NUMBER,CREDIT_DEBIT_CVV,CREDIT_DEBIT_EXPIRY,PIN,EMAIL,ADDRESS,NAME,PHONE,SSN,DATE_TIME,PASSPORT_NUMBER,DRIVER_ID,URL,AGE,USERNAME,PASSWORD,AWS_ACCESS_KEY,AWS_SECRET_KEY,IP_ADDRESS,MAC_ADDRESS,ALL
+          MASK_MODE: REPLACE_WITH_PII_ENTITY_TYPE
+      Role: !GetAtt  ChatRedactionLambdaExecutionRole.Arn
+  CheckComprehendStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: check-comprehend-status
+      CodeUri: functions/checkComprehendJobStatus/
+      Handler: checkComprehendJobStatus.lambda_handler
+      Runtime: python3.8
+      Environment:
+        Variables:
+          LOGGING_LEVEL: 'INFO'
+      Role: !GetAtt  ChatRedactionLambdaExecutionRole.Arn
+  StoreRedactedTranscriptFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: store-redacted-transcript
+      CodeUri: functions/storeRedactedTranscript/
+      Handler: storeRedactedTranscript.lambda_handler
+      Runtime: python3.8
+      Environment:
+        Variables:
+          LOGGING_LEVEL: 'INFO'
+      Role: !GetAtt  ChatRedactionLambdaExecutionRole.Arn
+Outputs:
+  InvokeRedactionStateMachineFunctionArn:
+    Description: "InvokeRedactionStateMachineFunction ARN"
+    Value: !GetAtt InvokeRedactionStateMachineFunction.Arn
+  LoadTranscriptFunctionArn:
+    Description: "LoadTranscriptFunction ARN"
+    Value: !GetAtt LoadTranscriptFunction.Arn
+  SubmitComprehendJobFunctionArn:
+    Description: "SubmitComprehendJobFunction ARN"
+    Value: !GetAtt SubmitComprehendJobFunction.Arn
+  CheckComprehendStatusFunctionArn:
+    Description: "CheckComprehendStatusFunction ARN"
+    Value: !GetAtt CheckComprehendStatusFunction.Arn
+  StoreRedactedTranscriptFunctionArn:
+    Description: "StoreRedactedTranscriptFunction ARN"
+    Value: !GetAtt StoreRedactedTranscriptFunction.Arn

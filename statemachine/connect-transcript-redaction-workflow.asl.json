@@ -1,0 +1,99 @@
+{
+    "Comment": "Step function to redact sensitive data from an Amazon Connect transcript",
+    "StartAt": "Load Transcript",
+    "States": {
+     "Load Transcript": {
+            "Type": "Task",
+            "Resource": "${LoadTranscriptFunctionArn}",
+            "ResultPath": "$.LoadTranscript",
+            "Next": "Submit Comprehend Job",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "IntervalSeconds": 20,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2
+                }
+            ]
+        },
+      "Submit Comprehend Job": {
+            "Type": "Task",
+            "Resource": "${SubmitComprehendJobFunctionArn}",
+            "ResultPath": "$.ComprehendJob",
+            "Next": "Wait X Seconds",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "IntervalSeconds": 20,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2
+                }
+            ]
+        },
+      "Wait X Seconds": {
+            "Type": "Wait",
+            "SecondsPath": "$.wait_time",
+            "Next": "Get Comprehend Job Status"
+        },
+      "Get Comprehend Job Status": {
+            "Type": "Task",
+            "Resource": "${CheckComprehendStatusFunctionArn}",
+            "Next": "Job Complete?",
+            "InputPath": "$.ComprehendJob",
+            "ResultPath": "$.ComprehendJob",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "IntervalSeconds": 20,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2
+                }
+            ]
+        },
+      "Job Complete?": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.ComprehendJob.JobStatus",
+                    "StringEquals": "FAILED",
+                    "Next": "Job Failed"
+                },
+                {
+                    "Variable": "$.ComprehendJob.JobStatus",
+                    "StringEquals": "COMPLETED",
+                    "Next": "Store Redacted Transcript"
+                }
+            ],
+            "Default": "Wait X Seconds"
+        },
+        "Job Failed": {
+            "Type": "Fail",
+            "Cause": "Transcription job Failed",
+            "Error": "Transcription job FAILED"
+        },
+      "Store Redacted Transcript": {
+            "Type": "Task",
+            "Resource": "${StoreRedactedTranscriptFunctionArn}",
+            "InputPath": "$",
+            "ResultPath": "$.StoreRedactedTranscriptStatus",
+            "End": true,
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "IntervalSeconds": 20,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2
+                }
+            ]
+      
+      }
+    }
+  }
