@@ -28,7 +28,7 @@ When a chat transcript is put into the S3 bucket, it triggers a Lambda function(
 1. On the `Services` menu in the upper left, search for and then choose `AWS Lambda`
 1. On the `AWS Lambda` page, choose `Create Function` on the upper right corner
 1. Under `Create function`, choose the radio button for Browse serverless app repository
-1. Under the `Public applications` tab, search for amazon-connect-chat-redaction-example and click on it
+1. Under the `Public applications` tab, search for `amazon-connect-chat-redaction` and click on it
 1. In the `Application settings` section, review the Application details, and update the following Parameters:
     * `ConnectChatBucketName`: Enter the name of the existing Amazon Connect S3 bucket where transcripts are stored eg. `connect-270e274d111a`.
 1. Click `Deploy` and deploy the template.
