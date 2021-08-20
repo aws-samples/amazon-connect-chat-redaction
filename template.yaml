@@ -11,12 +11,9 @@ Metadata:
     ReadmeUrl: README.md
     Labels: ['connect','chat','redaction','comprehend','step-functions','lambda']
     HomePageUrl: https://github.com/aws-samples/amazon-connect-chat-redaction
-    SemanticVersion: 0.0.1
+    SemanticVersion: 0.0.2
     SourceCodeUrl: https://github.com/aws-samples/amazon-connect-chat-redaction
 Parameters:
-  ConnectChatBucketName:
-    Type: String
-    Description: The existing Amazon Connect S3 bucket where transcripts are stored eg. connect-270e274d111a
   ConnectChatBucketName:
     Type: String
     Description: The existing Amazon Connect S3 bucket where transcripts are stored eg. connect-270e274d111a
