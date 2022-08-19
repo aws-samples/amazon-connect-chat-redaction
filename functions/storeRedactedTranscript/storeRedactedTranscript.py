@@ -50,7 +50,7 @@ def lambda_handler(event,context):
         # Replace original transcript content if its plain/text with redacted content
         for transcript in source_content.get('Transcript'):
             pii_item = transcript
-            if(transcript.get('ContentType') == 'text/plain'):
+            if(transcript.get('ContentType') in ['text/plain','text/markdown']):
                 #Replace transcript content with redacted content
                 pii_item['Content'] = redacted_content.pop(0)
             pii_transcript.get("Transcript").append(pii_item)
