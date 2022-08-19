@@ -68,7 +68,7 @@ def lambda_handler(event,context):
         
         # Clean up unwanted files
         s3_resource.Object(source_bucket, redacted_content_out_key).delete()
-        s3_resource.Object(source_bucket, redacted_content_key + '.write_access_check_file.temp').delete()
+        s3_resource.Object(source_bucket, source_key + '.redactedoutput/.write_access_check_file.temp').delete()
         s3_resource.Object(source_bucket, redaction_source_key).delete()
         
         return "Successfully redacted transcripts!"
